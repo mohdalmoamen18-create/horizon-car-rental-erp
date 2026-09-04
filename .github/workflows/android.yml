@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Create Web Directory Bypass
+      - name: Create Web Directory and Web Redirect
         run: |
           mkdir -p dist
           echo '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Horizon ERP</title><script>window.location.href = "https://github.com";</script></head><body></body></html>' > dist/index.html
@@ -49,3 +49,4 @@ jobs:
         with:
           name: horizon-car-rental-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
