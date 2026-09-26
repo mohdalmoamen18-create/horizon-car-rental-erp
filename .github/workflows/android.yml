@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Android Build - Full Diagnostic (No Premature Fix)
 on:
   push:
     branches: [ main, master ]
@@ -12,7 +12,13 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Create Web Directory and Files
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ============ المرحلة 1: الإنشاء الأول ============
+      - name: Create Web Directory
         run: |
           mkdir -p dist
           cat > dist/index.html <<'HTML'
@@ -21,45 +27,52 @@ jobs:
             <head>
               <meta charset="utf-8" />
               <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <title>Horizon ERP</title>
+              <title>Horizon Car Rental ERP</title>
+              <style>
+                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; background: #f3f4f6; }
+                a { padding: 15px 30px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+              </style>
             </head>
             <body>
-              <h1>Horizon ERP</h1>
+              <a href="https://github.com" target="_blank">Horizon Car Rental ERP</a>
             </body>
           </html>
           HTML
 
-          cat > package.json <<'JSON'
+      - name: Create package.json with Pinned Capacitor
+        run: |
+          cat > package.json <<'EOF'
           {
-            "name": "horizon-app",
+            "name": "horizon-car-rental-erp",
             "version": "1.0.0",
+            "description": "Enterprise Resource Planning System for Car Rental Business",
             "private": true,
             "scripts": {
-              "build": "echo build"
+              "build": "echo 'Build complete'"
             },
             "dependencies": {
               "@capacitor/core": "6.1.2",
-              "@capacitor/cli": "6.1.2",
-              "@capacitor/android": "6.1.2"
+              "@capacitor/android": "6.1.2",
+              "@capacitor/cli": "6.1.2"
             }
           }
-          JSON
+          EOF
+          echo "✅ package.json created with Capacitor 6.1.2"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm install
 
-      - name: Configure Capacitor
+      - name: Initialize Capacitor Project (First Time Only)
         run: |
-          if [ ! -d android ]; then
+          if [ ! -d "android" ]; then
+            echo "🔧 Creating Android project for the first time..."
             npx cap init "Horizon Car Rental" "com.horizon.carrental" --web-dir=dist
             npx cap add android
+            echo "✅ Android project created"
+          else
+            echo "✅ Android project already exists"
+            npx cap sync android
           fi
-          npx cap sync android
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -67,14 +80,158 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build APK via Gradle
+      # ============ المرحلة 2: التشخيص البحت (بدون إصلاح مسبق) ============
+      - name: "DIAGNOSTIC 1: Gradle Dependency Tree (Complete)"
+        continue-on-error: true
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew clean assembleDebug
+          echo "📋 ========== GRADLE FULL DEPENDENCY TREE =========="
+          ./gradlew app:dependencies --stacktrace 2>&1 | tee ../gradle-dependencies.log
+          echo ""
+          echo "Saved to: gradle-dependencies.log"
 
-      - name: Upload Finished APK
+      - name: "DIAGNOSTIC 2: Kotlin Version Insight"
+        continue-on-error: true
+        run: |
+          cd android
+          echo ""
+          echo "🔍 ========== KOTLIN-STDLIB DEPENDENCY INSIGHT =========="
+          ./gradlew app:dependencyInsight --dependency kotlin-stdlib --stacktrace 2>&1 | tee ../gradle-kotlin-stdlib.log || true
+          echo ""
+          echo "Saved to: gradle-kotlin-stdlib.log"
+
+      - name: "DIAGNOSTIC 3: Android Gradle Plugin & Kotlin Version"
+        continue-on-error: true
+        run: |
+          cd android
+          echo ""
+          echo "📦 ========== ANDROID GRADLE PLUGIN VERSION =========="
+          grep -i "gradle\|kotlin" build.gradle 2>/dev/null | head -20 || echo "Not found in root build.gradle"
+          echo ""
+          echo "📦 ========== APP BUILD GRADLE =========="
+          grep -i "gradle\|kotlin\|dependencies" app/build.gradle 2>/dev/null | head -30 || echo "Not found in app/build.gradle"
+
+      - name: "DIAGNOSTIC 4: Check Duplicate Classes (with Full Stacktrace)"
+        continue-on-error: true
+        run: |
+          cd android
+          echo ""
+          echo "❌ ========== CHECKING FOR DUPLICATE CLASSES (NO SKIP) =========="
+          ./gradlew app:checkDebugDuplicateClasses --stacktrace 2>&1 | tee ../gradle-duplicate-check.log
+          echo ""
+          echo "Saved to: gradle-duplicate-check.log"
+
+      - name: "DIAGNOSTIC 5: Extract & Analyze Duplicate Classes"
+        if: always()
+        run: |
+          echo ""
+          echo "🔴 ========== DUPLICATE CLASS ANALYSIS =========="
+          
+          if [ -f "../gradle-duplicate-check.log" ]; then
+            if grep -q "FAILED" ../gradle-duplicate-check.log; then
+              echo "❌ DUPLICATE CLASSES DETECTED!"
+              echo ""
+              echo "Extracting error block:"
+              echo "----------------------------------------"
+              grep -A 100 "Execution failed\|FAILURE\|Duplicate class\|duplicate entry" ../gradle-duplicate-check.log | head -150
+              echo "----------------------------------------"
+              echo ""
+              echo "Full log tail (last 300 lines):"
+              tail -300 ../gradle-duplicate-check.log
+            else
+              echo "✅ NO DUPLICATE CLASSES FOUND"
+              grep "BUILD SUCCESSFUL" ../gradle-duplicate-check.log || echo "Build status: UNKNOWN"
+            fi
+          fi
+
+      - name: "DIAGNOSTIC 6: Identify Conflicting Libraries"
+        if: always()
+        run: |
+          echo ""
+          echo "📚 ========== CONFLICTING LIBRARIES ANALYSIS =========="
+          
+          echo "1️⃣  Searching for Kotlin stdlib versions..."
+          if grep -q "kotlin-stdlib" ../gradle-dependencies.log 2>/dev/null; then
+            echo "Found kotlin-stdlib entries:"
+            grep "kotlin-stdlib" ../gradle-dependencies.log | head -20
+          else
+            echo "❌ kotlin-stdlib not found in dependency tree"
+          fi
+          
+          echo ""
+          echo "2️⃣  Searching for Kotlin reflection libraries..."
+          if grep -q "kotlin-reflect" ../gradle-dependencies.log 2>/dev/null; then
+            echo "Found kotlin-reflect entries:"
+            grep "kotlin-reflect" ../gradle-dependencies.log | head -20
+          else
+            echo "❌ kotlin-reflect not found"
+          fi
+          
+          echo ""
+          echo "3️⃣  Searching for Capacitor Android lib versions..."
+          if grep -q "capacitor-android\|@capacitor/android" ../gradle-dependencies.log 2>/dev/null; then
+            echo "Found Capacitor entries:"
+            grep "capacitor-android\|capacitor_android" ../gradle-dependencies.log | head -20
+          else
+            echo "❌ Capacitor Android not found in dependency output"
+          fi
+
+      - name: "DIAGNOSTIC 7: Inspect Generated Gradle Files"
+        if: always()
+        run: |
+          echo ""
+          echo "📄 ========== GENERATED GRADLE CONFIGURATION =========="
+          
+          if [ -f "android/build.gradle" ]; then
+            echo "✅ Found android/build.gradle:"
+            cat android/build.gradle
+          fi
+          
+          echo ""
+          echo "---"
+          echo ""
+          
+          if [ -f "android/app/build.gradle" ]; then
+            echo "✅ Found android/app/build.gradle:"
+            cat android/app/build.gradle
+          fi
+
+      - name: "DIAGNOSTIC 8: Gradle Wrapper Properties"
+        if: always()
+        run: |
+          echo ""
+          echo "📋 ========== GRADLE WRAPPER PROPERTIES =========="
+          
+          if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "✅ Gradle Wrapper Configuration:"
+            cat android/gradle/wrapper/gradle-wrapper.properties
+          fi
+
+      - name: "REPORT: Diagnostic Complete - Waiting for Analysis"
+        if: always()
+        run: |
+          echo ""
+          echo "╔════════════════════════════════════════════════════════╗"
+          echo "║        DIAGNOSTIC PHASE COMPLETE                       ║"
+          echo "║                                                        ║"
+          echo "║  Generated logs:                                       ║"
+          echo "║  1. gradle-dependencies.log       (Full tree)          ║"
+          echo "║  2. gradle-kotlin-stdlib.log      (Kotlin insight)     ║"
+          echo "║  3. gradle-duplicate-check.log    (Duplicate error)    ║"
+          echo "║                                                        ║"
+          echo "║  Check artifacts for detailed analysis                ║"
+          echo "║  DO NOT FIX YET - Awaiting analysis                   ║"
+          echo "╚════════════════════════════════════════════════════════╝"
+          echo ""
+
+      - name: Upload Diagnostic Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: horizon-car-rental-app
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: diagnostic-logs
+          path: |
+            gradle-dependencies.log
+            gradle-kotlin-stdlib.log
+            gradle-duplicate-check.log
+          retention-days: 7
