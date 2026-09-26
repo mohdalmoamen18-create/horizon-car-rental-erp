@@ -74,6 +74,33 @@ jobs:
             npx cap sync android
           fi
 
+      - name: "FIX ONLY: Adjust Java Version from 21 to 17 (Required for JDK 17)"
+        continue-on-error: true
+        run: |
+          echo "🔧 Checking for Java 21 source compatibility..."
+          
+          if [ -f "android/build.gradle" ]; then
+            if grep -q "VERSION_21\|sourceCompatibility.*21\|targetCompatibility.*21" android/build.gradle; then
+              echo "⚠️  Found Java 21 in android/build.gradle - Fixing to Java 17..."
+              sed -i 's/VERSION_21/VERSION_17/g' android/build.gradle
+              sed -i 's/sourceCompatibility.*21/sourceCompatibility = JavaVersion.VERSION_17/g' android/build.gradle
+              sed -i 's/targetCompatibility.*21/targetCompatibility = JavaVersion.VERSION_17/g' android/build.gradle
+              echo "✅ Fixed android/build.gradle"
+            fi
+          fi
+          
+          if [ -f "android/app/build.gradle" ]; then
+            if grep -q "VERSION_21\|sourceCompatibility.*21\|targetCompatibility.*21" android/app/build.gradle; then
+              echo "⚠️  Found Java 21 in android/app/build.gradle - Fixing to Java 17..."
+              sed -i 's/VERSION_21/VERSION_17/g' android/app/build.gradle
+              sed -i 's/sourceCompatibility.*21/sourceCompatibility = JavaVersion.VERSION_17/g' android/app/build.gradle
+              sed -i 's/targetCompatibility.*21/targetCompatibility = JavaVersion.VERSION_17/g' android/app/build.gradle
+              echo "✅ Fixed android/app/build.gradle"
+            fi
+          fi
+          
+          echo "Java compatibility check complete"
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -159,12 +186,12 @@ jobs:
           grep -r "kotlin-stdlib-jdk8" ../01-gradle-dependencies.log 2>/dev/null | head -30 || echo "Not found in dependencies"
           
           echo ""
-          echo "Full jdk7 insight:"
-          cat ../02-kotlin-stdlib-jdk7.log | head -50
+          echo "Full jdk7 insight (first 100 lines):"
+          head -100 ../02-kotlin-stdlib-jdk7.log
           
           echo ""
-          echo "Full jdk8 insight:"
-          cat ../03-kotlin-stdlib-jdk8.log | head -50
+          echo "Full jdk8 insight (first 100 lines):"
+          head -100 ../03-kotlin-stdlib-jdk8.log
 
       - name: "REPORT: Diagnostic Complete - Awaiting Analysis"
         if: always()
@@ -182,7 +209,8 @@ jobs:
           echo "║  6. 06-gradle-wrapper.log         (wrapper properties)  ║"
           echo "║                                                          ║"
           echo "║  AWAITING ROOT CAUSE ANALYSIS                            ║"
-          echo "║  NO FIXES APPLIED YET                                    ║"
+          echo "║  NO KOTLIN/GRADLE FIXES APPLIED YET                      ║"
+          echo "║  (Only Java 17 compatibility adjustment made)            ║"
           echo "╚══════════════════════════════════════════════════════════╝"
           echo ""
 
