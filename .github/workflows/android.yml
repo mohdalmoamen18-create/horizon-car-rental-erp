@@ -1,4 +1,4 @@
-name: Android Build - Full Diagnostic (No Premature Fix)
+name: Android Build - Precise Diagnostic (No Fixes Yet)
 on:
   push:
     branches: [ main, master ]
@@ -80,158 +80,122 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # ============ المرحلة 2: التشخيص البحت (بدون إصلاح مسبق) ============
-      - name: "DIAGNOSTIC 1: Gradle Dependency Tree (Complete)"
+      # ============ المرحلة 2: التشخيص الدقيق (BEFORE FIX) ============
+      
+      - name: "DIAGNOSTIC 1: Full Gradle Dependency Tree"
         continue-on-error: true
         run: |
           cd android
           chmod +x ./gradlew
           echo "📋 ========== GRADLE FULL DEPENDENCY TREE =========="
-          ./gradlew app:dependencies --stacktrace 2>&1 | tee ../gradle-dependencies.log
+          ./gradlew app:dependencies --stacktrace 2>&1 | tee ../01-gradle-dependencies.log
           echo ""
-          echo "Saved to: gradle-dependencies.log"
+          echo "✅ Saved to: 01-gradle-dependencies.log"
 
-      - name: "DIAGNOSTIC 2: Kotlin Version Insight"
+      - name: "DIAGNOSTIC 2: Kotlin-stdlib-jdk7 Dependency Insight"
         continue-on-error: true
         run: |
           cd android
           echo ""
-          echo "🔍 ========== KOTLIN-STDLIB DEPENDENCY INSIGHT =========="
-          ./gradlew app:dependencyInsight --dependency kotlin-stdlib --stacktrace 2>&1 | tee ../gradle-kotlin-stdlib.log || true
+          echo "🔍 ========== KOTLIN-STDLIB-JDK7 DEPENDENCY INSIGHT =========="
+          ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk7 --stacktrace 2>&1 | tee ../02-kotlin-stdlib-jdk7.log
           echo ""
-          echo "Saved to: gradle-kotlin-stdlib.log"
+          echo "✅ Saved to: 02-kotlin-stdlib-jdk7.log"
 
-      - name: "DIAGNOSTIC 3: Android Gradle Plugin & Kotlin Version"
+      - name: "DIAGNOSTIC 3: Kotlin-stdlib-jdk8 Dependency Insight"
         continue-on-error: true
         run: |
           cd android
           echo ""
-          echo "📦 ========== ANDROID GRADLE PLUGIN VERSION =========="
-          grep -i "gradle\|kotlin" build.gradle 2>/dev/null | head -20 || echo "Not found in root build.gradle"
+          echo "🔍 ========== KOTLIN-STDLIB-JDK8 DEPENDENCY INSIGHT =========="
+          ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk8 --stacktrace 2>&1 | tee ../03-kotlin-stdlib-jdk8.log
           echo ""
-          echo "📦 ========== APP BUILD GRADLE =========="
-          grep -i "gradle\|kotlin\|dependencies" app/build.gradle 2>/dev/null | head -30 || echo "Not found in app/build.gradle"
+          echo "✅ Saved to: 03-kotlin-stdlib-jdk8.log"
 
-      - name: "DIAGNOSTIC 4: Check Duplicate Classes (with Full Stacktrace)"
-        continue-on-error: true
-        run: |
-          cd android
-          echo ""
-          echo "❌ ========== CHECKING FOR DUPLICATE CLASSES (NO SKIP) =========="
-          ./gradlew app:checkDebugDuplicateClasses --stacktrace 2>&1 | tee ../gradle-duplicate-check.log
-          echo ""
-          echo "Saved to: gradle-duplicate-check.log"
-
-      - name: "DIAGNOSTIC 5: Extract & Analyze Duplicate Classes"
+      - name: "DIAGNOSTIC 4: android/build.gradle Content"
         if: always()
         run: |
           echo ""
-          echo "🔴 ========== DUPLICATE CLASS ANALYSIS =========="
-          
-          if [ -f "../gradle-duplicate-check.log" ]; then
-            if grep -q "FAILED" ../gradle-duplicate-check.log; then
-              echo "❌ DUPLICATE CLASSES DETECTED!"
-              echo ""
-              echo "Extracting error block:"
-              echo "----------------------------------------"
-              grep -A 100 "Execution failed\|FAILURE\|Duplicate class\|duplicate entry" ../gradle-duplicate-check.log | head -150
-              echo "----------------------------------------"
-              echo ""
-              echo "Full log tail (last 300 lines):"
-              tail -300 ../gradle-duplicate-check.log
-            else
-              echo "✅ NO DUPLICATE CLASSES FOUND"
-              grep "BUILD SUCCESSFUL" ../gradle-duplicate-check.log || echo "Build status: UNKNOWN"
-            fi
-          fi
-
-      - name: "DIAGNOSTIC 6: Identify Conflicting Libraries"
-        if: always()
-        run: |
-          echo ""
-          echo "📚 ========== CONFLICTING LIBRARIES ANALYSIS =========="
-          
-          echo "1️⃣  Searching for Kotlin stdlib versions..."
-          if grep -q "kotlin-stdlib" ../gradle-dependencies.log 2>/dev/null; then
-            echo "Found kotlin-stdlib entries:"
-            grep "kotlin-stdlib" ../gradle-dependencies.log | head -20
-          else
-            echo "❌ kotlin-stdlib not found in dependency tree"
-          fi
-          
-          echo ""
-          echo "2️⃣  Searching for Kotlin reflection libraries..."
-          if grep -q "kotlin-reflect" ../gradle-dependencies.log 2>/dev/null; then
-            echo "Found kotlin-reflect entries:"
-            grep "kotlin-reflect" ../gradle-dependencies.log | head -20
-          else
-            echo "❌ kotlin-reflect not found"
-          fi
-          
-          echo ""
-          echo "3️⃣  Searching for Capacitor Android lib versions..."
-          if grep -q "capacitor-android\|@capacitor/android" ../gradle-dependencies.log 2>/dev/null; then
-            echo "Found Capacitor entries:"
-            grep "capacitor-android\|capacitor_android" ../gradle-dependencies.log | head -20
-          else
-            echo "❌ Capacitor Android not found in dependency output"
-          fi
-
-      - name: "DIAGNOSTIC 7: Inspect Generated Gradle Files"
-        if: always()
-        run: |
-          echo ""
-          echo "📄 ========== GENERATED GRADLE CONFIGURATION =========="
-          
+          echo "📄 ========== ANDROID/BUILD.GRADLE =========="
           if [ -f "android/build.gradle" ]; then
-            echo "✅ Found android/build.gradle:"
-            cat android/build.gradle
-          fi
-          
-          echo ""
-          echo "---"
-          echo ""
-          
-          if [ -f "android/app/build.gradle" ]; then
-            echo "✅ Found android/app/build.gradle:"
-            cat android/app/build.gradle
+            cat android/build.gradle | tee ../04-android-build-gradle.log
+          else
+            echo "❌ File not found" | tee ../04-android-build-gradle.log
           fi
 
-      - name: "DIAGNOSTIC 8: Gradle Wrapper Properties"
+      - name: "DIAGNOSTIC 5: android/app/build.gradle Content"
+        if: always()
+        run: |
+          echo ""
+          echo "📄 ========== ANDROID/APP/BUILD.GRADLE =========="
+          if [ -f "android/app/build.gradle" ]; then
+            cat android/app/build.gradle | tee ../05-android-app-build-gradle.log
+          else
+            echo "❌ File not found" | tee ../05-android-app-build-gradle.log
+          fi
+
+      - name: "DIAGNOSTIC 6: Gradle Wrapper Properties"
         if: always()
         run: |
           echo ""
           echo "📋 ========== GRADLE WRAPPER PROPERTIES =========="
-          
           if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
-            echo "✅ Gradle Wrapper Configuration:"
-            cat android/gradle/wrapper/gradle-wrapper.properties
+            cat android/gradle/wrapper/gradle-wrapper.properties | tee ../06-gradle-wrapper.log
+          else
+            echo "❌ File not found" | tee ../06-gradle-wrapper.log
           fi
 
-      - name: "REPORT: Diagnostic Complete - Waiting for Analysis"
+      - name: "ANALYSIS: Identify Root Cause of kotlin-stdlib-jdk7/jdk8"
         if: always()
         run: |
           echo ""
-          echo "╔════════════════════════════════════════════════════════╗"
-          echo "║        DIAGNOSTIC PHASE COMPLETE                       ║"
-          echo "║                                                        ║"
-          echo "║  Generated logs:                                       ║"
-          echo "║  1. gradle-dependencies.log       (Full tree)          ║"
-          echo "║  2. gradle-kotlin-stdlib.log      (Kotlin insight)     ║"
-          echo "║  3. gradle-duplicate-check.log    (Duplicate error)    ║"
-          echo "║                                                        ║"
-          echo "║  Check artifacts for detailed analysis                ║"
-          echo "║  DO NOT FIX YET - Awaiting analysis                   ║"
-          echo "╚════════════════════════════════════════════════════════╝"
+          echo "🔎 ========== IDENTIFYING ROOT CAUSE =========="
+          echo ""
+          echo "Searching for what imports kotlin-stdlib-jdk7:1.6.21..."
+          grep -r "kotlin-stdlib-jdk7" ../01-gradle-dependencies.log 2>/dev/null | head -30 || echo "Not found in dependencies"
+          
+          echo ""
+          echo "Searching for what imports kotlin-stdlib-jdk8:1.6.21..."
+          grep -r "kotlin-stdlib-jdk8" ../01-gradle-dependencies.log 2>/dev/null | head -30 || echo "Not found in dependencies"
+          
+          echo ""
+          echo "Full jdk7 insight:"
+          cat ../02-kotlin-stdlib-jdk7.log | head -50
+          
+          echo ""
+          echo "Full jdk8 insight:"
+          cat ../03-kotlin-stdlib-jdk8.log | head -50
+
+      - name: "REPORT: Diagnostic Complete - Awaiting Analysis"
+        if: always()
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════╗"
+          echo "║         PRECISE DIAGNOSTIC PHASE COMPLETE                ║"
+          echo "║                                                          ║"
+          echo "║  Generated logs (check artifacts):                       ║"
+          echo "║  1. 01-gradle-dependencies.log    (Full tree)            ║"
+          echo "║  2. 02-kotlin-stdlib-jdk7.log     (jdk7 insight)         ║"
+          echo "║  3. 03-kotlin-stdlib-jdk8.log     (jdk8 insight)         ║"
+          echo "║  4. 04-android-build-gradle.log   (build.gradle root)   ║"
+          echo "║  5. 05-android-app-build-gradle.log (app/build.gradle) ║"
+          echo "║  6. 06-gradle-wrapper.log         (wrapper properties)  ║"
+          echo "║                                                          ║"
+          echo "║  AWAITING ROOT CAUSE ANALYSIS                            ║"
+          echo "║  NO FIXES APPLIED YET                                    ║"
+          echo "╚══════════════════════════════════════════════════════════╝"
           echo ""
 
       - name: Upload Diagnostic Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostic-logs
+          name: diagnostic-logs-precise
           path: |
-            gradle-dependencies.log
-            gradle-kotlin-stdlib.log
-            gradle-duplicate-check.log
+            01-gradle-dependencies.log
+            02-kotlin-stdlib-jdk7.log
+            03-kotlin-stdlib-jdk8.log
+            04-android-build-gradle.log
+            05-android-app-build-gradle.log
+            06-gradle-wrapper.log
           retention-days: 7
