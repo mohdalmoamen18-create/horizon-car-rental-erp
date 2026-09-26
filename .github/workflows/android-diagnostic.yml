@@ -1,0 +1,125 @@
+name: Build Android APK - Diagnostic
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create Web Directory
+        run: |
+          mkdir -p dist
+          cat > dist/index.html <<'HTML'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>Horizon Car Rental ERP</title>
+              <style>
+                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; background: #f3f4f6; }
+                a { padding: 15px 30px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+              </style>
+            </head>
+            <body>
+              <a href="https://github.com" target="_blank">Horizon Car Rental ERP</a>
+            </body>
+          </html>
+          HTML
+
+      - name: Create package.json with Pinned Capacitor
+        run: |
+          cat > package.json <<'EOF'
+          {
+            "name": "horizon-car-rental-erp",
+            "version": "1.0.0",
+            "description": "Enterprise Resource Planning System for Car Rental Business",
+            "private": true,
+            "scripts": {
+              "build": "echo 'Build complete'"
+            },
+            "dependencies": {
+              "@capacitor/core": "6.1.2",
+              "@capacitor/android": "6.1.2",
+              "@capacitor/cli": "6.1.2"
+            }
+          }
+          EOF
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Initialize Capacitor (first time only)
+        run: |
+          if [ ! -d "android" ]; then
+            echo "🔧 Initializing Capacitor for the first time..."
+            npx cap init "Horizon Car Rental" "com.horizon.carrental" --web-dir=dist
+            npx cap add android
+          else
+            echo "✅ Android project exists. Syncing..."
+            npx cap sync android
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Diagnose Gradle Dependencies
+        run: |
+          cd android
+          chmod +x ./gradlew
+          
+          echo "📋 === Gradle Dependency Tree (Full) ==="
+          ./gradlew app:dependencies --stacktrace 2>&1 | tee gradle-dependencies.txt
+          
+          echo ""
+          echo "🔍 === Searching for Kotlin stdlib duplicates ==="
+          grep -i "kotlin-stdlib" gradle-dependencies.txt || echo "No kotlin-stdlib found in dependencies"
+          
+          echo ""
+          echo "🔍 === Searching for Kotlin reflection duplicates ==="
+          grep -i "kotlin-reflect" gradle-dependencies.txt || echo "No kotlin-reflect found in dependencies"
+
+      - name: Attempt Build to Get Exact Error
+        continue-on-error: true
+        run: |
+          cd android
+          echo "🏗️ Attempting clean build to capture exact duplicate classes..."
+          ./gradlew clean assembleDebug --stacktrace 2>&1 | tee build-output.txt
+
+      - name: Extract Duplicate Class Information
+        if: always()
+        run: |
+          if [ -f "android/build-output.txt" ]; then
+            echo "❌ === Build Failed - Extracting Error Details ==="
+            echo ""
+            echo "🔴 Duplicate Classes Found:"
+            grep -A 20 "checkDebugDuplicateClasses" android/build-output.txt || echo "Pattern not found"
+            
+            echo ""
+            echo "📄 Full error output (last 150 lines):"
+            tail -150 android/build-output.txt
+          fi
+
+      - name: Upload Diagnostic Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-reports
+          path: |
+            android/build-output.txt
+            android/gradle-dependencies.txt
+          retention-days: 7
