@@ -1,4 +1,4 @@
-name: Android Diagnostic - Full Dependency Analysis (No Fixes)
+name: Android Diagnostic - Collect Gradle Outputs
 on:
   push:
     branches: [ main, master ]
@@ -27,9 +27,6 @@ jobs:
               <meta charset="utf-8" />
               <meta name="viewport" content="width=device-width, initial-scale=1" />
               <title>Horizon Car Rental ERP</title>
-              <style>
-                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; background: #f3f4f6; }
-              </style>
             </head>
             <body>
               <h1>Horizon Car Rental ERP</h1>
@@ -37,17 +34,13 @@ jobs:
           </html>
           HTML
 
-      - name: Create package.json with Pinned Capacitor
+      - name: Create package.json
         run: |
           cat > package.json <<'EOF'
           {
             "name": "horizon-car-rental-erp",
             "version": "1.0.0",
-            "description": "Enterprise Resource Planning System for Car Rental Business",
             "private": true,
-            "scripts": {
-              "build": "echo 'Build complete'"
-            },
             "dependencies": {
               "@capacitor/core": "6.1.2",
               "@capacitor/android": "6.1.2",
@@ -59,7 +52,7 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Initialize Capacitor Project
+      - name: Initialize Capacitor
         run: |
           if [ ! -d "android" ]; then
             npx cap init "Horizon Car Rental" "com.horizon.carrental" --web-dir=dist
@@ -68,177 +61,61 @@ jobs:
             npx cap sync android
           fi
 
-      - name: Set up JDK 21 (Match Capacitor Generated Project)
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
 
-      # ============ التشخيص الكامل ============
-
-      - name: "DIAGNOSTIC 1: Full Gradle Dependency Tree"
-        continue-on-error: true
+      - name: "Step 1: Gradle Dependency Tree"
         run: |
           cd android
           chmod +x ./gradlew
-          echo "📋 ========== GRADLE FULL DEPENDENCY TREE =========="
-          echo "Running: ./gradlew app:dependencies --stacktrace"
-          ./gradlew app:dependencies --stacktrace 2>&1 | tee ../01-gradle-dependencies.log || true
-          echo ""
-          echo "✅ Log saved to: 01-gradle-dependencies.log"
-          echo "Log file size: $(wc -c < ../01-gradle-dependencies.log) bytes"
+          ./gradlew app:dependencies --stacktrace > ../01-gradle-dependencies.txt 2>&1 || true
 
-      - name: "DIAGNOSTIC 2: Kotlin-stdlib-jdk7 Dependency Insight"
-        continue-on-error: true
+      - name: "Step 2: Kotlin-stdlib-jdk7 Insight"
         run: |
           cd android
-          echo ""
-          echo "🔍 ========== KOTLIN-STDLIB-JDK7 DEPENDENCY INSIGHT =========="
-          echo "Running: ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk7 --stacktrace"
-          ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk7 --stacktrace 2>&1 | tee ../02-kotlin-stdlib-jdk7.log || true
-          echo ""
-          echo "✅ Log saved to: 02-kotlin-stdlib-jdk7.log"
-          echo "Log file size: $(wc -c < ../02-kotlin-stdlib-jdk7.log) bytes"
+          ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk7 --stacktrace > ../02-kotlin-stdlib-jdk7.txt 2>&1 || true
 
-      - name: "DIAGNOSTIC 3: Kotlin-stdlib-jdk8 Dependency Insight"
-        continue-on-error: true
+      - name: "Step 3: Kotlin-stdlib-jdk8 Insight"
         run: |
           cd android
-          echo ""
-          echo "🔍 ========== KOTLIN-STDLIB-JDK8 DEPENDENCY INSIGHT =========="
-          echo "Running: ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk8 --stacktrace"
-          ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk8 --stacktrace 2>&1 | tee ../03-kotlin-stdlib-jdk8.log || true
-          echo ""
-          echo "✅ Log saved to: 03-kotlin-stdlib-jdk8.log"
-          echo "Log file size: $(wc -c < ../03-kotlin-stdlib-jdk8.log) bytes"
+          ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk8 --stacktrace > ../03-kotlin-stdlib-jdk8.txt 2>&1 || true
 
-      - name: "DIAGNOSTIC 4: android/build.gradle Content"
-        if: always()
+      - name: "Step 4: android/build.gradle"
         run: |
-          echo ""
-          echo "📄 ========== ANDROID/BUILD.GRADLE =========="
           if [ -f "android/build.gradle" ]; then
-            echo "✅ File found"
-            cat android/build.gradle | tee ../04-android-build-gradle.log
-            echo ""
-            echo "File size: $(wc -c < android/build.gradle) bytes"
-          else
-            echo "❌ File not found" | tee ../04-android-build-gradle.log
+            cp android/build.gradle ./04-android-build-gradle.txt
           fi
 
-      - name: "DIAGNOSTIC 5: android/app/build.gradle Content"
-        if: always()
+      - name: "Step 5: android/app/build.gradle"
         run: |
-          echo ""
-          echo "📄 ========== ANDROID/APP/BUILD.GRADLE =========="
           if [ -f "android/app/build.gradle" ]; then
-            echo "✅ File found"
-            cat android/app/build.gradle | tee ../05-android-app-build-gradle.log
-            echo ""
-            echo "File size: $(wc -c < android/app/build.gradle) bytes"
-          else
-            echo "❌ File not found" | tee ../05-android-app-build-gradle.log
+            cp android/app/build.gradle ./05-android-app-build-gradle.txt
           fi
 
-      - name: "DIAGNOSTIC 6: Gradle Wrapper Properties"
-        if: always()
+      - name: "Step 6: gradle-wrapper.properties"
         run: |
-          echo ""
-          echo "📋 ========== GRADLE WRAPPER PROPERTIES =========="
           if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
-            echo "✅ File found"
-            cat android/gradle/wrapper/gradle-wrapper.properties | tee ../06-gradle-wrapper.log
-            echo ""
-            echo "File size: $(wc -c < android/gradle/wrapper/gradle-wrapper.properties) bytes"
-          else
-            echo "❌ File not found" | tee ../06-gradle-wrapper.log
+            cp android/gradle/wrapper/gradle-wrapper.properties ./06-gradle-wrapper.txt
           fi
 
-      - name: "ANALYSIS: Extract Root Cause from Dependencies"
-        if: always()
+      - name: "Verify logs generated"
         run: |
-          echo ""
-          echo "🔎 ========== ANALYZING ROOT CAUSE =========="
-          echo ""
-          
-          if [ -f "../01-gradle-dependencies.log" ]; then
-            echo "📚 Searching for kotlin-stdlib-jdk7 in dependency tree..."
-            grep -i "kotlin-stdlib-jdk7" ../01-gradle-dependencies.log | head -30 || echo "Pattern not found in dependency tree"
-            
-            echo ""
-            echo "📚 Searching for kotlin-stdlib-jdk8 in dependency tree..."
-            grep -i "kotlin-stdlib-jdk8" ../01-gradle-dependencies.log | head -30 || echo "Pattern not found in dependency tree"
-          else
-            echo "⚠️  01-gradle-dependencies.log not found"
-          fi
-          
-          echo ""
-          echo "📄 Showing first 200 lines of each insight log:"
-          
-          if [ -f "../02-kotlin-stdlib-jdk7.log" ]; then
-            echo ""
-            echo "--- 02-kotlin-stdlib-jdk7.log ---"
-            head -200 ../02-kotlin-stdlib-jdk7.log
-          else
-            echo "⚠️  02-kotlin-stdlib-jdk7.log not found"
-          fi
-          
-          if [ -f "../03-kotlin-stdlib-jdk8.log" ]; then
-            echo ""
-            echo "--- 03-kotlin-stdlib-jdk8.log ---"
-            head -200 ../03-kotlin-stdlib-jdk8.log
-          else
-            echo "⚠️  03-kotlin-stdlib-jdk8.log not found"
-          fi
+          echo "📋 Generated files:"
+          ls -lh *.txt 2>/dev/null || echo "No txt files generated"
 
-      - name: "FINAL REPORT: Diagnostic Complete"
-        if: always()
-        run: |
-          echo ""
-          echo "╔════════════════════════════════════════════════════════╗"
-          echo "║         FULL DIAGNOSTIC COMPLETE                       ║"
-          echo "║                                                        ║"
-          echo "║  All logs generated (download from artifacts):         ║"
-          echo "║                                                        ║"
-          echo "║  1. 01-gradle-dependencies.log                         ║"
-          echo "║     └─ Full dependency tree                            ║"
-          echo "║                                                        ║"
-          echo "║  2. 02-kotlin-stdlib-jdk7.log                          ║"
-          echo "║     └─ Traces where kotlin-stdlib-jdk7:1.6.21 comes   ║"
-          echo "║                                                        ║"
-          echo "║  3. 03-kotlin-stdlib-jdk8.log                          ║"
-          echo "║     └─ Traces where kotlin-stdlib-jdk8:1.6.21 comes   ║"
-          echo "║                                                        ║"
-          echo "║  4. 04-android-build-gradle.log                        ║"
-          echo "║     └─ android/build.gradle                            ║"
-          echo "║                                                        ║"
-          echo "║  5. 05-android-app-build-gradle.log                    ║"
-          echo "║     └─ android/app/build.gradle                        ║"
-          echo "║                                                        ║"
-          echo "║  6. 06-gradle-wrapper.log                              ║"
-          echo "║     └─ Gradle wrapper configuration                    ║"
-          echo "║                                                        ║"
-          echo "║  NO FIXES APPLIED - Data collection only               ║"
-          echo "║  Ready for analysis and targeted fix                   ║"
-          echo "╚════════════════════════════════════════════════════════╝"
-          echo ""
-
-      - name: Verify Log Files Exist
-        if: always()
-        run: |
-          echo "📋 Checking generated log files..."
-          ls -lh ../*.log 2>/dev/null || echo "No log files found in parent directory"
-
-      - name: Upload All Diagnostic Logs
+      - name: Upload Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostic-logs-complete
+          name: diagnostic-logs
           path: |
-            01-gradle-dependencies.log
-            02-kotlin-stdlib-jdk7.log
-            03-kotlin-stdlib-jdk8.log
-            04-android-build-gradle.log
-            05-android-app-build-gradle.log
-            06-gradle-wrapper.log
+            01-gradle-dependencies.txt
+            02-kotlin-stdlib-jdk7.txt
+            03-kotlin-stdlib-jdk8.txt
+            04-android-build-gradle.txt
+            05-android-app-build-gradle.txt
+            06-gradle-wrapper.txt
           retention-days: 7
