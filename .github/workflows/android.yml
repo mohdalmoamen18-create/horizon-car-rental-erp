@@ -1,11 +1,11 @@
-name: Android Build - Precise Diagnostic (No Fixes Yet)
+name: Android Diagnostic - Full Dependency Analysis (No Fixes)
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  build:
+  diagnose:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,7 +17,6 @@ jobs:
         with:
           node-version: '20'
 
-      # ============ المرحلة 1: الإنشاء الأول ============
       - name: Create Web Directory
         run: |
           mkdir -p dist
@@ -30,11 +29,10 @@ jobs:
               <title>Horizon Car Rental ERP</title>
               <style>
                 body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; background: #f3f4f6; }
-                a { padding: 15px 30px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
               </style>
             </head>
             <body>
-              <a href="https://github.com" target="_blank">Horizon Car Rental ERP</a>
+              <h1>Horizon Car Rental ERP</h1>
             </body>
           </html>
           HTML
@@ -57,58 +55,27 @@ jobs:
             }
           }
           EOF
-          echo "✅ package.json created with Capacitor 6.1.2"
 
       - name: Install npm dependencies
         run: npm install
 
-      - name: Initialize Capacitor Project (First Time Only)
+      - name: Initialize Capacitor Project
         run: |
           if [ ! -d "android" ]; then
-            echo "🔧 Creating Android project for the first time..."
             npx cap init "Horizon Car Rental" "com.horizon.carrental" --web-dir=dist
             npx cap add android
-            echo "✅ Android project created"
           else
-            echo "✅ Android project already exists"
             npx cap sync android
           fi
 
-      - name: "FIX ONLY: Adjust Java Version from 21 to 17 (Required for JDK 17)"
-        continue-on-error: true
-        run: |
-          echo "🔧 Checking for Java 21 source compatibility..."
-          
-          if [ -f "android/build.gradle" ]; then
-            if grep -q "VERSION_21\|sourceCompatibility.*21\|targetCompatibility.*21" android/build.gradle; then
-              echo "⚠️  Found Java 21 in android/build.gradle - Fixing to Java 17..."
-              sed -i 's/VERSION_21/VERSION_17/g' android/build.gradle
-              sed -i 's/sourceCompatibility.*21/sourceCompatibility = JavaVersion.VERSION_17/g' android/build.gradle
-              sed -i 's/targetCompatibility.*21/targetCompatibility = JavaVersion.VERSION_17/g' android/build.gradle
-              echo "✅ Fixed android/build.gradle"
-            fi
-          fi
-          
-          if [ -f "android/app/build.gradle" ]; then
-            if grep -q "VERSION_21\|sourceCompatibility.*21\|targetCompatibility.*21" android/app/build.gradle; then
-              echo "⚠️  Found Java 21 in android/app/build.gradle - Fixing to Java 17..."
-              sed -i 's/VERSION_21/VERSION_17/g' android/app/build.gradle
-              sed -i 's/sourceCompatibility.*21/sourceCompatibility = JavaVersion.VERSION_17/g' android/app/build.gradle
-              sed -i 's/targetCompatibility.*21/targetCompatibility = JavaVersion.VERSION_17/g' android/app/build.gradle
-              echo "✅ Fixed android/app/build.gradle"
-            fi
-          fi
-          
-          echo "Java compatibility check complete"
-
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
-      # ============ المرحلة 2: التشخيص الدقيق (BEFORE FIX) ============
-      
+      # ============ التشخيص الكامل بدون تعديلات ============
+
       - name: "DIAGNOSTIC 1: Full Gradle Dependency Tree"
         continue-on-error: true
         run: |
@@ -117,7 +84,7 @@ jobs:
           echo "📋 ========== GRADLE FULL DEPENDENCY TREE =========="
           ./gradlew app:dependencies --stacktrace 2>&1 | tee ../01-gradle-dependencies.log
           echo ""
-          echo "✅ Saved to: 01-gradle-dependencies.log"
+          echo "✅ Log saved to: 01-gradle-dependencies.log"
 
       - name: "DIAGNOSTIC 2: Kotlin-stdlib-jdk7 Dependency Insight"
         continue-on-error: true
@@ -127,7 +94,7 @@ jobs:
           echo "🔍 ========== KOTLIN-STDLIB-JDK7 DEPENDENCY INSIGHT =========="
           ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk7 --stacktrace 2>&1 | tee ../02-kotlin-stdlib-jdk7.log
           echo ""
-          echo "✅ Saved to: 02-kotlin-stdlib-jdk7.log"
+          echo "✅ Log saved to: 02-kotlin-stdlib-jdk7.log"
 
       - name: "DIAGNOSTIC 3: Kotlin-stdlib-jdk8 Dependency Insight"
         continue-on-error: true
@@ -137,7 +104,7 @@ jobs:
           echo "🔍 ========== KOTLIN-STDLIB-JDK8 DEPENDENCY INSIGHT =========="
           ./gradlew app:dependencyInsight --dependency kotlin-stdlib-jdk8 --stacktrace 2>&1 | tee ../03-kotlin-stdlib-jdk8.log
           echo ""
-          echo "✅ Saved to: 03-kotlin-stdlib-jdk8.log"
+          echo "✅ Log saved to: 03-kotlin-stdlib-jdk8.log"
 
       - name: "DIAGNOSTIC 4: android/build.gradle Content"
         if: always()
@@ -145,6 +112,10 @@ jobs:
           echo ""
           echo "📄 ========== ANDROID/BUILD.GRADLE =========="
           if [ -f "android/build.gradle" ]; then
+            echo "✅ File found. Content:"
+            echo "---BEGIN---"
+            cat android/build.gradle
+            echo "---END---"
             cat android/build.gradle | tee ../04-android-build-gradle.log
           else
             echo "❌ File not found" | tee ../04-android-build-gradle.log
@@ -156,6 +127,10 @@ jobs:
           echo ""
           echo "📄 ========== ANDROID/APP/BUILD.GRADLE =========="
           if [ -f "android/app/build.gradle" ]; then
+            echo "✅ File found. Content:"
+            echo "---BEGIN---"
+            cat android/app/build.gradle
+            echo "---END---"
             cat android/app/build.gradle | tee ../05-android-app-build-gradle.log
           else
             echo "❌ File not found" | tee ../05-android-app-build-gradle.log
@@ -167,58 +142,73 @@ jobs:
           echo ""
           echo "📋 ========== GRADLE WRAPPER PROPERTIES =========="
           if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "✅ File found. Content:"
+            echo "---BEGIN---"
+            cat android/gradle/wrapper/gradle-wrapper.properties
+            echo "---END---"
             cat android/gradle/wrapper/gradle-wrapper.properties | tee ../06-gradle-wrapper.log
           else
             echo "❌ File not found" | tee ../06-gradle-wrapper.log
           fi
 
-      - name: "ANALYSIS: Identify Root Cause of kotlin-stdlib-jdk7/jdk8"
+      - name: "ANALYSIS: Extract Root Cause"
         if: always()
         run: |
           echo ""
-          echo "🔎 ========== IDENTIFYING ROOT CAUSE =========="
+          echo "🔎 ========== ANALYZING ROOT CAUSE =========="
           echo ""
-          echo "Searching for what imports kotlin-stdlib-jdk7:1.6.21..."
-          grep -r "kotlin-stdlib-jdk7" ../01-gradle-dependencies.log 2>/dev/null | head -30 || echo "Not found in dependencies"
+          echo "📚 Searching for kotlin-stdlib-jdk7 in dependency tree..."
+          grep -i "kotlin-stdlib-jdk7" ../01-gradle-dependencies.log 2>/dev/null | head -20 || echo "Not found"
           
           echo ""
-          echo "Searching for what imports kotlin-stdlib-jdk8:1.6.21..."
-          grep -r "kotlin-stdlib-jdk8" ../01-gradle-dependencies.log 2>/dev/null | head -30 || echo "Not found in dependencies"
+          echo "📚 Searching for kotlin-stdlib-jdk8 in dependency tree..."
+          grep -i "kotlin-stdlib-jdk8" ../01-gradle-dependencies.log 2>/dev/null | head -20 || echo "Not found"
           
           echo ""
-          echo "Full jdk7 insight (first 100 lines):"
-          head -100 ../02-kotlin-stdlib-jdk7.log
+          echo "🔍 Full jdk7 insight output (first 150 lines):"
+          head -150 ../02-kotlin-stdlib-jdk7.log || echo "Log not available"
           
           echo ""
-          echo "Full jdk8 insight (first 100 lines):"
-          head -100 ../03-kotlin-stdlib-jdk8.log
+          echo "🔍 Full jdk8 insight output (first 150 lines):"
+          head -150 ../03-kotlin-stdlib-jdk8.log || echo "Log not available"
 
-      - name: "REPORT: Diagnostic Complete - Awaiting Analysis"
+      - name: "FINAL REPORT: Diagnostic Complete"
         if: always()
         run: |
           echo ""
-          echo "╔══════════════════════════════════════════════════════════╗"
-          echo "║         PRECISE DIAGNOSTIC PHASE COMPLETE                ║"
-          echo "║                                                          ║"
-          echo "║  Generated logs (check artifacts):                       ║"
-          echo "║  1. 01-gradle-dependencies.log    (Full tree)            ║"
-          echo "║  2. 02-kotlin-stdlib-jdk7.log     (jdk7 insight)         ║"
-          echo "║  3. 03-kotlin-stdlib-jdk8.log     (jdk8 insight)         ║"
-          echo "║  4. 04-android-build-gradle.log   (build.gradle root)   ║"
-          echo "║  5. 05-android-app-build-gradle.log (app/build.gradle) ║"
-          echo "║  6. 06-gradle-wrapper.log         (wrapper properties)  ║"
-          echo "║                                                          ║"
-          echo "║  AWAITING ROOT CAUSE ANALYSIS                            ║"
-          echo "║  NO KOTLIN/GRADLE FIXES APPLIED YET                      ║"
-          echo "║  (Only Java 17 compatibility adjustment made)            ║"
-          echo "╚══════════════════════════════════════════════════════════╝"
+          echo "╔════════════════════════════════════════════════════════╗"
+          echo "║         FULL DIAGNOSTIC COMPLETE                       ║"
+          echo "║                                                        ║"
+          echo "║  All logs generated (download from artifacts):         ║"
+          echo "║                                                        ║"
+          echo "║  1. 01-gradle-dependencies.log                         ║"
+          echo "║     └─ Full dependency tree                            ║"
+          echo "║                                                        ║"
+          echo "║  2. 02-kotlin-stdlib-jdk7.log                          ║"
+          echo "║     └─ Traces where kotlin-stdlib-jdk7:1.6.21 comes   ║"
+          echo "║                                                        ║"
+          echo "║  3. 03-kotlin-stdlib-jdk8.log                          ║"
+          echo "║     └─ Traces where kotlin-stdlib-jdk8:1.6.21 comes   ║"
+          echo "║                                                        ║"
+          echo "║  4. 04-android-build-gradle.log                        ║"
+          echo "║     └─ Root build.gradle                               ║"
+          echo "║                                                        ║"
+          echo "║  5. 05-android-app-build-gradle.log                    ║"
+          echo "║     └─ App build.gradle with all dependencies          ║"
+          echo "║                                                        ║"
+          echo "║  6. 06-gradle-wrapper.log                              ║"
+          echo "║     └─ Gradle & wrapper configuration                  ║"
+          echo "║                                                        ║"
+          echo "║  NO FIXES APPLIED YET                                  ║"
+          echo "║  Ready for root cause analysis                         ║"
+          echo "╚════════════════════════════════════════════════════════╝"
           echo ""
 
-      - name: Upload Diagnostic Artifacts
+      - name: Upload All Diagnostic Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: diagnostic-logs-precise
+          name: diagnostic-logs-complete
           path: |
             01-gradle-dependencies.log
             02-kotlin-stdlib-jdk7.log
